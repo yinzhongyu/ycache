@@ -5,12 +5,13 @@ import (
 	"testing"
 )
 
-func TestYCachet(t *testing.T) {
-	log.Println("test the Cache")
+func TestYCache_Put(t *testing.T) {
+	log.Println("test the YCache")
 	k1, k2, k3 := "key1", "key2", "key3"
 	v1, v2, v3 := []byte("value1"),[]byte("value2"), []byte("value3")
 
-	cache := Newcache(3)
+ 	cache := NewYcache(3)
+
 	cache.Put(k1, v1)
 	cache.Put(k2, v2)
 	cache.Put(k3, v3)
@@ -35,5 +36,6 @@ func TestYCachet(t *testing.T) {
 	if v, ok := cache.Get("key4"); !ok || string(v) !=  string(v4) {
 		t.Fatalf("k4 put cache  failed")
 	}
+
 
 }
