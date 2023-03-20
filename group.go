@@ -5,6 +5,8 @@ import (
 	"log"
 	"sync"
 	"ycache/cache"
+	"ycache/singleflight"
+	"ycache/ycachepb"
 )
 
 
@@ -32,6 +34,7 @@ type Group struct {
 	getter    Getter
 	mainCache *cache.YCache
 	peers     PeerPicker
+	loader    *singleflight.Group
 }
 
 var (
@@ -50,11 +53,17 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) ([]byte, error) {
-	bytes, err := peer.Get(g.name, key)
+	req := &ycachepb.Request{
+		Group: g.name,
+		Key:   key,
+	}
+	res := &ycachepb.Response{}
+	err := peer.Get(req, res)
+
 	if err != nil {
 		return nil, err
 	}
-	return bytes, nil
+	return res.Value, nil
 }
 
 
@@ -69,6 +78,7 @@ func NewGroup(name string, cap int, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache.NewYcache(cap),
+		loader:    &singleflight.Group{},
 	}
 
 	groups[name] = g
@@ -103,16 +113,25 @@ func (g *Group) Get(key string) ([]byte, error) {
 }
 
 func (g *Group) load(key string) (value []byte, err error) {
-	if g.peers != nil {
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err = g.getFromPeer(peer, key); err == nil {
-				return value, nil
-			}
-			log.Println("[GeeCache] Failed to get from peer", err)
-		}
-	}
 
-	return g.getLocally(key)
+	viewi, err := g.loader.Do(key, func() (interface{}, error) {
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err = g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
+				log.Println("[GeeCache] Failed to get from peer", err)
+			}
+		}
+
+		return g.getLocally(key)
+	})
+
+	if err == nil {
+		return viewi.([]byte), nil
+	}
+	return
+
 }
 
 func (g *Group) getLocally(key string) ([]byte, error) {

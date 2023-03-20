@@ -1,15 +1,16 @@
 package main
 
 import (
-	"log"
+	"google.golang.org/protobuf/proto"
 	"net/http"
 	"strings"
+	"ycache/ycachepb"
 )
 
 
 
 func  httpserver(w http.ResponseWriter, r *http.Request) {
-	log.Println( r.Method, r.URL.Path)
+
 	parts := strings.SplitN(r.URL.Path[len("/ycache")+1:], "/", 2)
 
 	if len(parts) != 2 {
@@ -31,9 +32,16 @@ func  httpserver(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	// Write the value to the response body as a proto message.
+	body, err := proto.Marshal(&ycachepb.Response{Value: view})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(body)
 	//w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(view)
+
 
 }
 //
